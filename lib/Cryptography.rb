@@ -3,7 +3,7 @@ require 'openssl'
 #TODO: make methods public and private, as appropriate
 class Cryptography
 
-	NUM_PBKDF_ITERATIONS = 10000
+	NUM_PBKDF_ITERATIONS = 100000 #tailor this to performance requirements
 	SALT_BYTE_LENGTH     = 16
 	AES_TYPE             = "AES-128-CBC"
 	SHA_TYPE             = "SHA512"

@@ -1,4 +1,4 @@
-require mysql2
+#require mysql2
 
 class Database
 	#TODO: get all this shit to work in a RESTful way (ugh)
@@ -9,6 +9,8 @@ class Database
 
 	MIN_PASSWORD_LENGTH = 8
 	MAX_PASSWORD_LENGTH = 100
+
+=begin
 
 	#TODO: decide whether any of this can stay
 	JSON_KEYS = {
@@ -58,8 +60,6 @@ class Database
 		end
 	end
 
-	=begin
-
 	#encryption stuff
 	def encryptTag(tag)
 		#TODO: fill this in
@@ -73,8 +73,6 @@ class Database
 		#TODO: fill this in
 	end
 
-	=end
-
 	#password stuff
 	def adminPasswordCorrect?(adminId,password)
 		adminIdHash = adminIdHashFromAdminId(adminId)
@@ -83,7 +81,7 @@ class Database
 		passwordHash = passwordHashAndSaltResult[0]["passwordHash"]
 		passwordSalt = passwordHashAndSaltResult[0]["passwordSalt"]
 	
-		if passwordHash==hashString(adminId,passwordSalt)
+		if passwordHash==digestStringWithSalt(adminId,passwordSalt)
 			return true
 		else
 			return false
@@ -97,14 +95,16 @@ class Database
 		passwordHash = passwordHashAndSaltResult[0]["passwordHash"]
 		passwordSalt = passwordHashAndSaltResult[0]["passwordSalt"]
 	
-		if passwordHash==hashString(userId,passwordSalt)
+		if passwordHash==digestStringWithSalt(userId,passwordSalt)
 			return true
 		else
 			return false
 		end
 	end
 
-	def confirmiIdFormatCorrect(userId)
+=end
+
+	def self.confirmIdFormatCorrect(userId)
 		#enforce a minimum and maximum username length
 		if userId.length<MIN_USERNAME_LENGTH
 			raise "Username must be at least #{MIN_USERNAME_LENGTH} characters"
@@ -113,24 +113,26 @@ class Database
 		end
 	
 		#enforce a certain character set - underscores and alphanumerics
-		if !(userId =~ /[a-zA-Z0-9_]{userId.length}/)
+		if !(userId =~ /^[a-zA-Z0-9_]+$/)
 			raise "Cannot use username with invalid characters"
 		end
 	end
 
-	def confirmPasswordFormatCorrect(password)
+	def self.confirmPasswordFormatCorrect(password)
 		#enforce a minimum and maximum password length
 		if password.length<MIN_PASSWORD_LENGTH
 			raise "Password must be at least #{MIN_PASSWORD_LENGTH} characters"
-		elsif
+		elsif password.length>MAX_PASSWORD_LENGTH
 			raise "Password must be at most #{MAX_PASSWORD_LENGTH} characters"
 		end
 	
 		#enforce a certain character set - same as userId for now
-		if !(password =~ /[a-zA-Z0-9_]{userId.length}/)
+		if !(password =~ /^[a-zA-Z0-9_]+$/) #TODO: increase the size of allowed character set
 			raise "Cannot use password with invalid characters"
 		end
 	end
+
+=begin
 
 	#permissions
 	def deviceOwned?(deviceId)
@@ -205,9 +207,9 @@ class Database
 	#heavier db logic - we assume that any poisonous input has already been filtered out
 	def addAdminToDb(adminId,password)
 		adminSalt    = newSalt()
-		adminIdHash  = hashString(adminId,adminSalt)
+		adminIdHash  = digestStringWithSalt(adminId,adminSalt)
 		passwordSalt = newSalt()
-		passwordHash = hashString(password,passwordSalt)
+		passwordHash = digestStringWithSalt(password,passwordSalt)
 	
 		sql.query("INSERT INTO admins (adminIdHash,adminIdSalt,passwordHash,passwordSalt) VALUES(#{adminIdHash},#{adminIdSalt},#{passwordHash},#{passwordSalt})")
 	end
@@ -215,7 +217,7 @@ class Database
 	def addUserToDb(userId,password)
 		userIdHash   = userIdHashFromUserId(userId)
 		passwordSalt = newSalt()
-		passwordHash = hashString(password,passwordSalt)
+		passwordHash = digestStringWithSalt(password,passwordSalt)
 	
 		sql.query("INSERT INTO users (userIdHash,passwordHash,passwordSalt) VALUES(#{userIdHash},#{passwordHash},#{passwordSalt})")
 	end
@@ -287,7 +289,7 @@ class Database
 
 	def userIdHashFromUserId(userId)
 		userIdSaltResult = sql.query("SELECT salt FROM globalSalts WHERE fieldName='userId'")
-		userIdHash = hashString(userId,userIdSaltResult[0][0])
+		userIdHash = digestStringWithSalt(userId,userIdSaltResult[0][0])
 	
 		return userIdHash
 	end
@@ -440,4 +442,7 @@ class Database
 
 		getTagFromDb(userId,password,deviceId)
 	end
+
+=end	
+	
 end
