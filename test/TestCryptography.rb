@@ -6,35 +6,34 @@ class TestCryptography < Test::Unit::TestCase
 	TEST_PASSWORD = "password123"
 	TEST_PHRASE_A = "Hello World!"
 	TEST_PHRASE_B = "Goodbye World!"
-	TEST_SALT     = 
+	TEST_SALT     = OpenSSL::Random.random_bytes(16)
 
-	#essentially this is just testing if the hashing process is deterministic and stateless
-	#i.e. it produces the same outputs for the same inputs, regardless of previous inputs
-	def testHashingDeterministic
-		testHashA     = hashString(TEST_PHRASE_A,TEST_SALT)
-		testHashB     = hashString(TEST_PHRASE_B,TEST_SALT)
-		testHashCopyA = hashString(TEST_PHRASE_A,TEST_SALT)
-		testHashCopyB = hashString(TEST_PHRASE_B,TEST_SALT)
-	
-		assert(testHashA==testHashCopyA,"Later digest of phrase A did not match the first digest")
-		assert(testHashB==testHashCopyB,"Later digest of phrase B did not match the first digest")
+	#test if identical inputs produce identical outputs
+	def testDigestSameInSameOut
+		testDigest     = Cryptography.digestStringWithSalt(TEST_PHRASE_A,TEST_SALT)
+		testDigestCopy = Cryptography.digestStringWithSalt(TEST_PHRASE_A,TEST_SALT)
+		
+		assert(testDigest==testDigestCopy,"Identical inputs do not produce identical outputs")
 	end
 
 	#test if different inputs produce different outputs
-	def testHashingDifferentInDifferentOut
-		testHash    = hashString(TEST_PHRASE_A,TEST_SALT)
-		testHashNeg = hashString(TEST_PHRASE_B,TEST_SALT)
+	def testDigestDifferentInDifferentOut
+		testDigest    = Cryptography.digestStringWithSalt(TEST_PHRASE_A,TEST_SALT)
+		testDigestNeg = Cryptography.digestStringWithSalt(TEST_PHRASE_B,TEST_SALT)
 
-		assert(testHash!=testHashNeg,"Different inputs do not produce different outputs")
+		assert(testDigest!=testDigestNeg,"Different inputs do not produce different outputs")
 	end
 
-	def testPassphraseEncryption
+	def testPassphraseEncryptionDecryption
 		#create key pair and encrypt data
-		publicKey, encryptedPrivateKey = createPassphraseKeyPair(TEST_USER_ID,TEST_PASSWORD,TEST_SALT)
-		encryptDataWithPublicKey(TEST_PHRASE_A, publicKey)
+		publicKey, encryptedPrivateKey = Cryptography.generateEncryptedPems(TEST_USER_ID,TEST_PASSWORD,TEST_SALT)
+		encryptedData = Cryptography.encryptWithPublicKeyPem(TEST_PHRASE_A, publicKey)
+
+		#show that the encrypted data is not the same as the sample data
+		assert(encryptedData!=TEST_PHRASE_A,"Data encrypted using public key matched the initial data")
 
 		#decrpyt data
-		decryptedData = decryptDataWithCredentials(TEST_USER_ID,TEST_PASSWORD,TEST_SALT)
+		decryptedData = Cryptography.decryptDataWithCredentials(TEST_USER_ID,TEST_PASSWORD,TEST_SALT,encryptedData,encryptedPrivateKey)
 	
 		#compare decrypted data with initial data
 		assert(decryptedData==TEST_PHRASE_A,"Data decrypted using passphrase-encrypted private key did not match initial data")

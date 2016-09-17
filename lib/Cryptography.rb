@@ -1,72 +1,62 @@
 require 'openssl'
 
+#TODO: make methods public and private, as appropriate
 class Cryptography
-	#TODO: change references to cryptographic hashes to "digests"
 
 	NUM_PBKDF_ITERATIONS = 10000
 	SALT_BYTE_LENGTH     = 16
 	AES_TYPE             = "AES-128-CBC"
+	SHA_TYPE             = "SHA512"
+	AES_BYTE_LENGTH      = 16
 	RSA_BIT_LENGTH       = 4096
 
 	#no two passphrases should be alike
-	def genPassPhrase(userId,password)
-		return "#{userId} #{password}"
+	def self.genUserPassPhrase(userId,password)
+		"#{userId} #{password}"
 	end
 
-	def hashString(string,salt)
-		#TODO: fill this in
+	def self.genSaltedString(string,salt)
+		"#{string}#{salt}" #no extra space in the middle (in order to reduce predictability)
 	end
 
-	def hashBytes(bytes,salt)
-		#TODO: fill this in
+	def self.digestStringWithSalt(string,salt)
+		OpenSSL::Digest.digest(SHA_TYPE,genSaltedString(string,salt))
 	end
 
 	#does not use an initialization vector - assume that the username / password combo is unique
-	def encryptUserPrivateKey(userId,password,salt,privateKey)
-		privateKeyCipher = OpenSSL::PKey::Cipher.new(AES_TYPE)
-		privateKeyCipher.encrypt
+	#uses PKCS to make life harder for dictionary attackers
+	def self.generateEncryptedPems(userId,password,salt)
+		privateKeyCipher     = OpenSSL::Cipher.new(AES_TYPE)
+		privateKeyPassphrase = OpenSSL::PKCS5.pbkdf2_hmac_sha1(genUserPassPhrase(userId,password), salt, NUM_PBKDF_ITERATIONS, AES_BYTE_LENGTH)
+		rsa                  = OpenSSL::PKey::RSA.new(RSA_BIT_LENGTH)
+		
+		publicKeyPem           = rsa.public_key.to_pem
+		privateKeyEncryptedPem = rsa.to_pem(privateKeyCipher,privateKeyPassphrase)
+		
+		return publicKeyPem, privateKeyEncryptedPem #these are both simply pem-encoded strings
+	end
 
-		privateKeyKeyPassPhrase = genPassphrase(userId,password)
+	def self.decryptPrivateKeyPem(userId,password,salt,privateKeyPem)
+		privateKeyCipher     = OpenSSL::Cipher.new(AES_TYPE)
+		privateKeyPassphrase = OpenSSL::PKCS5.pbkdf2_hmac_sha1(genUserPassPhrase(userId,password), salt, NUM_PBKDF_ITERATIONS, AES_BYTE_LENGTH)
+		rsa                  = OpenSSL::PKey::RSA.new(privateKeyPem,privateKeyPassphrase)
+		
+		privateKeyDecryptedPem = rsa.to_pem
+	end
 
-		privateKeyCipher.pkcs5_keyivgen(privateKeyKeyPassword,salt)
+	def self.encryptWithPublicKeyPem(data,publicKeyPem)
+		rsa = OpenSSL::PKey::RSA.new(publicKeyPem)
+		rsa.public_encrypt(data)
+	end
+
+	def self.decryptWithPrivateKeyPem(encryptedData,privateKeyPem)
+		rsa = OpenSSL::PKey::RSA.new(privateKeyPem)
+		rsa.private_decrypt(encryptedData)
+	end
+
+	def self.decryptDataWithCredentials(userId,password,salt,encryptedData,encryptedPrivateKeyPem)
+		privateKeyPem = decryptPrivateKeyPem(userId,password,salt,encryptedPrivateKeyPem)
+		decryptWithPrivateKeyPem(encryptedData,privateKeyPem)
+	end
 	
-		privateKeyEncrypted = privateKeyCipher.update(privateKey)
-		privateKeyEncrypted << privateKeyCipher.final
-	end
-
-	def decryptUserPrivateKey(userId,password,salt,privateKeyEncrypted)
-		privateKeyCipher = OpenSSL::PKey::Cipher.new(AES_TYPE)
-		privateKeyCipher.decrypt
-
-		privateKeyKeyPassPhrase = genPassphrase(userId,password)
-	
-		privateKeyCipher.pkcs5_keyivgen(privateKeyKeyPassword,salt)
-	
-		privateKey = privateKeyCipher.update(privateKeyEncrypted)
-		privateKey << privateKeyCipher.final
-	end
-
-	def decryptDataWithCredentials(userId,password,salt,privateKeyEncrpyted)
-		decryptUserPrivateKey(userId,password,salt,privateKeyEncrypted)
-		decryptDataWithPrivateKey(privateKeyDecrypted)
-	end
-
-	def encryptDataWithPublicKey
-		#TODO: fill this in
-	end
-
-	def decryptDataWithPrivateKey
-		#TODO: fill this in
-	end
-
-	def createRsaKeys
-		OpenSSL::PKey::RSA.new(RSA_BIT_LENGTH)
-		#TODO: now how do I return the byte stream?
-	end
-
-	def createPassphraseKeyPair(userId,password,salt)
-		publicKey, unencryptedPrivateKey = createRsaKeys
-
-		return publicKey, encryptPrivateKey(userId,password,salt,unencryptedPrivateKey)
-	end
 end
