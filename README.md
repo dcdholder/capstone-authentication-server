@@ -4,7 +4,7 @@
 This is the authentication server for our capstone project. Very early speculative development.
 
 ### Status
-Cryptography tests run. Username/password format tests run.
+Cryptography tests run. Username/password format tests run. Benchmarks for credential digestion run.
 
 ### Technical Details
-The server uses Ruby and MySQL. Maybe it'll use Rails too. Not an expert in this area.
+The server uses Ruby, Rails and MySQL.

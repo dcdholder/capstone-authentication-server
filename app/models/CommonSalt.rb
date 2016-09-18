@@ -1,0 +1,3 @@
+class CommonSalt < ApplicationRecord
+	
+end

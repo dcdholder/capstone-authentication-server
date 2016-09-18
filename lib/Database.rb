@@ -12,54 +12,6 @@ class Database
 
 =begin
 
-	#TODO: decide whether any of this can stay
-	JSON_KEYS = {
-		"Add Admin"        => ["Request Type", "Admin ID", "Admin Password"],
-		"Add User"         => ["Request Type", "User ID", "User Password"],
-		"Add Device"       => ["Request Type", "Device ID"],
-		"Set Ownership"    => [],
-		"Set Usership"     => [],
-		"Verify Usership"  => [],
-		"Verify Ownership" => [],
-		"Revoke Usership"  => [],
-		"Revoke Ownership" => [],
-		"Get Tag"          => []
-	}
-
-	#TODO: device whether any of this can stay
-	#JSON reader
-	def readJsonRequest(jsonRequest)
-		if !jsonRequest.has_key?("Request Type")
-			raise "No 'Request Type' field in JSON request"
-		elsif !JSON_KEYS.has_key?(jsonRequest["Request Type"])
-			raise "Invalid 'Request Type' field contents"
-		elsif JSON_KEYS[jsonRequest["Request Type"]].sort != jsonRequest.keys.sort
-			raise "Incorrect set of hash keys in JSON request" #TODO: should specify which ones are incorrect
-		end
-	
-		#TODO: fill the rest of the cases in
-		case jsonRequest["Request Type"]
-		when "Add Admin"
-			addAdmin(jsonRequest["Admin ID"],jsonRequest["Admin Password"])
-		when "Add User"
-			addUser(jsonRequest["User ID"],jsonRequest["User Password"])
-		when "Add Device"
-			addDevice(jsonRequest["Admin ID"], jsonRequest["Admin Password"], jsonRequest["Device ID"])
-		when "Set Usership"
-		
-		when "Set Ownership"
-	
-		when "Verify Usership"
-
-		when "Verify Ownership"
-
-		when "Revoke Usership"
-
-		when "Revoke Ownership"
-
-		end
-	end
-
 	#encryption stuff
 	def encryptTag(tag)
 		#TODO: fill this in
