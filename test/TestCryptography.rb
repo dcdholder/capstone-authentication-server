@@ -6,7 +6,7 @@ class TestCryptography < Test::Unit::TestCase
 	TEST_PASSWORD = "password123"
 	TEST_PHRASE_A = "Hello World!"
 	TEST_PHRASE_B = "Goodbye World!"
-	TEST_SALT     = OpenSSL::Random.random_bytes(16)
+	TEST_SALT     = OpenSSL::Random.random_bytes(Cryptography::SALT_BYTE_LENGTH)
 
 	#test if identical inputs produce identical outputs
 	def testDigestSameInSameOut
@@ -23,6 +23,8 @@ class TestCryptography < Test::Unit::TestCase
 
 		assert(testDigest!=testDigestNeg,"Different inputs do not produce different outputs")
 	end
+
+	#TODO: add some tests for the "sensitive string" version of digestStringWithSalt
 
 	def testPassphraseEncryptionDecryption
 		#create key pair and encrypt data
