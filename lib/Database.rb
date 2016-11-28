@@ -1,60 +1,92 @@
-#require mysql2
+require 'mysql2'
+
+require_relative './Cryptography.rb'
 
 class Database
-	#TODO: get all this shit to work in a RESTful way (ugh)
-	#TODO: decide whether to use Rails' ActiveRecord instead of SQL statements
-
 	MIN_USERNAME_LENGTH = 4
 	MAX_USERNAME_LENGTH = 100
 
 	MIN_PASSWORD_LENGTH = 8
 	MAX_PASSWORD_LENGTH = 100
 
-=begin
+	USER_SALT   = "\x00" * 32 #TODO: should not be hardcoded
+	DEVICE_SALT = "\x00" * 32 #TODO: should not be hardcoded
+
+	SQL = Mysql2::Client.new(:host => "localhost", :username => "admin", :password => nil)
+
+	#initialization
+	def self.burnEverything()
+		SQL.select_db("bleDevice")
+		SQL.query("TRUNCATE table deviceOwnership")
+		SQL.query("TRUNCATE table deviceUsership")
+		SQL.query("TRUNCATE table admins")
+		SQL.query("TRUNCATE table users")
+		SQL.query("TRUNCATE table devices")
+	end
+
+	#initialization
+	#def initDb
+		#SQL.query("INSERT INTO globalSalts (fieldName,salt) VALUES(user,#{USER_SALT})")
+		#SQL.query("INSERT INTO globalSalts (fieldName,salt) VALUES(device,#{DEVICE_SALT})")
+	#end
 
 	#encryption stuff
-	def encryptTag(tag)
-		#TODO: fill this in
+	def self.getPublicPem(username)
+		usernameHash = userIdHashFromUserId(username)
+		publicPemResult = SQL.query("SELECT publicKey FROM users WHERE userIdHash=#{usernameHash}")
+		return publicPemResult[0][0]
+	end
+	
+	def self.getPrivatePem(username,password)
+		confirmUserCredentials(username,password)
+	
+		encryptedPemResult = SQL.query("SELECT privateKeyCipher FROM users WHERE userIdHash=#{usernameHash}")
+		return Cryptography.decryptPrivateKeyPem(username,password,salt,encryptedPemResult[0][0])
+	end
+	
+	def self.decryptString(user,password,encryptedTag)
+		privatePem = getPrivatePem(user,password)
+		return decryptWithPrivateKeyPem(encryptedData,privatePem)
 	end
 
-	def decryptTag(encryptedTag)
-		#TODO: fill this in
+	def self.encryptString(user,tag)
+		publicPem  = getPublicPem(username)
+		return encryptWithPublicKeyPem(tag,publicPem)
 	end
 
-	def newSalt()
-		#TODO: fill this in
+	#not in use - salts are currently hard-coded to allow for frequent restarts
+	def self.newSalt()
+		return OpenSSL::Random.random_bytes(Cryptography::SALT_BYTE_LENGTH).unpack('C*').join(" ")
 	end
 
 	#password stuff
-	def adminPasswordCorrect?(adminId,password)
+	def self.adminPasswordCorrect?(adminId,password)
 		adminIdHash = adminIdHashFromAdminId(adminId)
 	
-		passwordHashAndSaltResult = sql.query("SELECT passwordHash,passwordSalt FROM admins WHERE adminIdHash=#{adminIdHash}")
+		passwordHashAndSaltResult = SQL.query("SELECT passwordHash,passwordSalt FROM admins WHERE adminIdHash=#{adminIdHash}")
 		passwordHash = passwordHashAndSaltResult[0]["passwordHash"]
 		passwordSalt = passwordHashAndSaltResult[0]["passwordSalt"]
 	
-		if passwordHash==digestStringWithSalt(adminId,passwordSalt)
+		if passwordHash==Cryptography.digestStringWithSalt(adminId,passwordSalt)
 			return true
 		else
 			return false
 		end
 	end
 
-	def userPasswordCorrect?(userId,password)
+	def self.userPasswordCorrect?(userId,password)
 		userIdHash = userIdHashFromUserId(userId)
 	
-		passwordHashAndSaltResult = sql.query("SELECT passwordHash,passwordSalt FROM users WHERE userIdHash=#{userIdHash}")
+		passwordHashAndSaltResult = SQL.query("SELECT passwordHash,passwordSalt FROM users WHERE userIdHash=#{userIdHash}")
 		passwordHash = passwordHashAndSaltResult[0]["passwordHash"]
 		passwordSalt = passwordHashAndSaltResult[0]["passwordSalt"]
 	
-		if passwordHash==digestStringWithSalt(userId,passwordSalt)
+		if passwordHash==Cryptography.digestStringWithSalt(userId,passwordSalt)
 			return true
 		else
 			return false
 		end
 	end
-
-=end
 
 	def self.confirmIdFormatCorrect(userId)
 		#enforce a minimum and maximum username length
@@ -84,13 +116,11 @@ class Database
 		end
 	end
 
-=begin
-
 	#permissions
-	def deviceOwned?(deviceId)
+	def self.deviceOwned?(deviceId)
 		deviceIdHash = deviceIdHashFromDeviceId(deviceId)
 	
-		numDeviceOwnersResult = sql.query("SELECT COUNT(*) FROM deviceOwnership WHERE deviceIdHash=#{deviceIdHash}")
+		numDeviceOwnersResult = SQL.query("SELECT COUNT(*) FROM deviceOwnership WHERE deviceIdHash=#{deviceIdHash}")
 		if numDeviceOwnersresult[0][0]==0
 			return false
 		elsif numeDeviceOwnersResult[0][0]==1
@@ -98,11 +128,11 @@ class Database
 		end
 	end
 
-	def userOwnsDevice?(userId,deviceId)
+	def self.userOwnsDevice?(userId,deviceId)
 		userIdHash   = userIdHashFromUserId(userId)
 		deviceIdHash = deviceIdHashFromDeviceId(deviceId)
 	
-		numMatchingDeviceOwnershipsResults = sql.query("SELECT COUNT(*) FROM deviceOwnership WHERE ownerIdHash=#{userIdHash} AND deviceIdHash=#{deviceIdHash}")
+		numMatchingDeviceOwnershipsResults = SQL.query("SELECT COUNT(*) FROM deviceOwnership WHERE ownerIdHash=#{userIdHash} AND deviceIdHash=#{deviceIdHash}")
 		if numMatchingDeviceOwnershipsResults[0][0]==0
 			return false
 		elsif numMatchingDeviceOwnershipsResults[0][0]==1
@@ -110,11 +140,11 @@ class Database
 		end
 	end
 
-	def userCanAccessDevice?(userId,deviceId)
+	def self.userCanAccessDevice?(userId,deviceId)
 		userIdHash   = userIdHashFromUserId(userId)
 		deviceIdHash = deviceIdHashFromDeviceId(deviceId)
 	
-		numMatchingDeviceUsershipsResults = sql.query("SELECT COUNT(*) FROM deviceUsership WHERE userIdHash=#{userIdHash} AND deviceIdHash=#{deviceIdHash}")
+		numMatchingDeviceUsershipsResults = SQL.query("SELECT COUNT(*) FROM deviceUsership WHERE userIdHash=#{userIdHash} AND deviceIdHash=#{deviceIdHash}")
 		if numMatchingDeviceUsershipsResults[0][0]==0
 			return false
 		elsif numMatchingDeviceUsershipsResults[0][0]==1
@@ -123,111 +153,202 @@ class Database
 	end
 
 	#existence
-	def adminExists?(adminId)
-		adminIdHash = adminIdHashFromAdminId(adminId)
-	
-		numMatchingAdminsResult = sql.query("SELECT COUNT(*) FROM admins WHERE adminIdHash=#{adminIdHash}")
-		if numMatchingAdminsResult[0][0]==0
+	def self.adminExists?(adminId)
+		begin
+			adminIdHash = adminIdHashFromAdminId(adminId)
+		rescue
 			return false
-		elsif numMatchingAdminsResult[0][0]==1
-			return true
+		end
+	
+		numMatchingAdminsResult = SQL.query("SELECT COUNT(*) FROM admins WHERE adminIdHash=#{adminIdHash}")
+		numMatchingAdminsResult.each do |row| 
+			if row["COUNT(*)"]==0
+				return false
+			elsif row["COUNT(*)"]==1
+				return true
+			end
 		end
 	end
 
-	def userExists?(userId)
+	def self.userExists?(userId)
 		userIdHash = userIdHashFromUserId(userId)
 	
-		numMatchingUsersResult = sql.query("SELECT COUNT(*) FROM users WHERE userIdHash=#{userIdHash}")
-		if numMatchingUsersResult[0][0]==0
-			return false
-		elsif numMatchingUsersResult[0][0]==1
-			return true
+		numMatchingUsersResult = SQL.query("SELECT COUNT(*) FROM users WHERE userIdHash=\'#{userIdHash}\'")
+		numMatchingUsersResult.each do |row|
+			if row["COUNT(*)"]==0
+				return false
+			elsif row["COUNT(*)"]==1
+				return true
+			end
 		end
 	end
 
-	def deviceExists?(deviceId)
+	def self.deviceExists?(deviceId)
 		deviceIdHash = deviceIdHashFromDeviceId(deviceId)
 	
-		numMatchingDevicesResult = sql.query("SELECT COUNT(*) FROM devices WHERE deviceIdHash=#{deviceIdHash}")
-		if numMatchingDevicesResult[0][0]==0
-			return false
-		elsif numMatchingDevicesResult[0][0]==1
-			return true
+		numMatchingDevicesResult = SQL.query("SELECT COUNT(*) FROM devices WHERE deviceIdHash=#{deviceIdHash}")
+		numMatchingDevicesResult.each do |row|
+			if row["COUNT(*)"]==0
+				return false
+			elsif row["COUNT(*)"]==1
+				return true
+			end
 		end
 	end
 
 	#heavier db logic - we assume that any poisonous input has already been filtered out
-	def addAdminToDb(adminId,password)
-		adminSalt    = newSalt()
-		adminIdHash  = digestStringWithSalt(adminId,adminSalt)
+	def self.addAdminToDb(adminId,password)
+		adminIdSalt  = newSalt()
+		adminIdHash  = Cryptography.digestStringWithSalt(adminId,adminIdSalt)
 		passwordSalt = newSalt()
-		passwordHash = digestStringWithSalt(password,passwordSalt)
+		passwordHash = Cryptography.digestStringWithSalt(password,passwordSalt)
 	
-		sql.query("INSERT INTO admins (adminIdHash,adminIdSalt,passwordHash,passwordSalt) VALUES(#{adminIdHash},#{adminIdSalt},#{passwordHash},#{passwordSalt})")
+		SQL.query("INSERT INTO admins (adminIdHash,adminIdSalt,passwordHash,passwordSalt) VALUES(\'#{adminIdHash}\',\'#{adminIdSalt}\',\'#{passwordHash}\',\'#{passwordSalt}\')")
 	end
 
-	def addUserToDb(userId,password)
+	def self.addUserToDb(userId,password)
 		userIdHash   = userIdHashFromUserId(userId)
 		passwordSalt = newSalt()
-		passwordHash = digestStringWithSalt(password,passwordSalt)
+		passwordHash = Cryptography.digestStringWithSalt(password,passwordSalt)
+		publicPem,privatePem = generateEncryptedPems(userId,password,USER_SALT)
 	
-		sql.query("INSERT INTO users (userIdHash,passwordHash,passwordSalt) VALUES(#{userIdHash},#{passwordHash},#{passwordSalt})")
+		SQL.query("INSERT INTO users (userIdHash,userIdSalt,passwordHash,passwordSalt,publicKey,privateKeyCipher) VALUES('#{userIdHash}','#{USER_SALT}','#{passwordHash}','#{passwordSalt}','#{publicPem}','#{privatePem}')")
 	end
 
-	def addDeviceToDb(deviceId)
+	def self.addDeviceToDb(deviceId)
 		deviceIdHash = deviceIdHashFromDeviceId(deviceId)
 
-		sql.query("INSERT INTO devices (deviceIdHash) VALUES(#{deviceIdHash})")
+		SQL.query("INSERT INTO devices (deviceIdHash) VALUES(#{deviceIdHash})")
 	end
 
-	def setOwnershipInDb(ownerId,deviceId)
+	def self.setOwnershipInDb(ownerId,deviceId)
 		ownerIdHash  = userIdHashFromUserId(ownerId)
 		deviceIdHash = deviceIdHashFromDeviceId(deviceId)
 	
-		sql.query("INSERT INTO deviceOwnership (deviceIdHash,ownerIdHash) VALUES(#{deviceIdHash},#{ownerIdHash})")
-		sql.query("INSERT INTO deviceUsership (deviceIdHash,userIdHash,ownerIdHash) VALUES(#{deviceIdHash},#{ownerIdHash},#{ownerIdHash})")
+		SQL.query("INSERT INTO deviceOwnership (deviceIdHash,ownerIdHash) VALUES(#{deviceIdHash},#{ownerIdHash})")
+		SQL.query("INSERT INTO deviceUsership (deviceIdHash,userIdHash,ownerIdHash) VALUES(#{deviceIdHash},#{ownerIdHash},#{ownerIdHash})")
 	end
 
-	def setUsershipInDb(owner,userId,deviceId)
+	def self.setUsershipInDb(owner,userId,deviceId)
 		userIdHash   = userIdHashFromUserId(userId)
 		ownerIdHash  = userIdHashFromUserId(ownerId)
 		deviceIdHash = deviceIdHashFromDeviceId(deviceId)
-	
-		sql.query("INSERT INTO deviceUsership (deviceIdHash,userIdHash,ownerIdHash) VALUES(#{deviceIdHash},#{userIdHash},#{ownerIdHash})")
+		
+		deviceIdCipher  = encryptString(userId,deviceId)
+		deviceTagCipher = encryptString(userId,deviceId)
+		userIdCipher    = encryptString(owner,userId)
+		
+		SQL.query("INSERT INTO deviceUsership (deviceIdHash,userIdHash,ownerIdHash,deviceIdCipher,deviceTagCipher,userIdCipher) VALUES(#{deviceIdHash},#{userIdHash},#{ownerIdHash},#{deviceIdCipher},#{deviceTagCipher},#{userIdCipher})")
 	end
 
-	def revokeUsershipInDb(userId,deviceId)
+	def self.revokeUsershipInDb(userId,deviceId)
 		userIdHash   = userIdHashFromUserId(userId)
 		deviceIdHash = deviceIdHashFromDeviceId(deviceId)
 	
-		sql.query("DELETE FROM deviceUsership  WHERE deviceIdHash=#{deviceIdHash} AND userIdHash=#{ownerIdHash}")
+		SQL.query("DELETE FROM deviceUsership  WHERE deviceIdHash=#{deviceIdHash} AND userIdHash=#{ownerIdHash}")
 	end
 
-	def revokeOwnershipInDb(ownerId,deviceId)
+	def self.revokeOwnershipInDb(ownerId,deviceId)
 		ownerIdHash  = userIdHashFromUserId(userId)
 		deviceIdHash = deviceIdHashFromDeviceId(ownerId,deviceId)
 
-		sql.query("DELETE FROM deviceOwnership WHERE deviceIdHash=#{deviceIdHash} AND ownerIdHash=#{ownerIdHash}")
-		sql.query("DELETE FROM deviceUsership  WHERE deviceIdHash=#{deviceIdHash} AND userIdHash=#{ownerIdHash}")
+		SQL.query("DELETE FROM deviceOwnership WHERE deviceIdHash=#{deviceIdHash} AND ownerIdHash=#{ownerIdHash}")
+		SQL.query("DELETE FROM deviceUsership  WHERE deviceIdHash=#{deviceIdHash} AND userIdHash=#{ownerIdHash}")
 	end
 
-	def getTagFromDb(userId,password,deviceId)
+	def self.getAllUserHashesFromDb()
+		userHashes = Array.new()
+		result = SQL.query("SELECT userIdHash FROM users")
+		result.each do |row|
+			userHashes << row[0]
+		end
+		
+		return userHashes
+	end
+	
+	def self.getAllDeviceHashesFromDb()
+		deviceHashes = Array.new()
+		result = SQL.query("SELECT deviceIdHash FROM devices")
+		result.each do |row|
+			deviceHashes << row[0]
+		end
+		
+		return deviceHashes
+	end
+
+	def self.getAllOwnedDevicesFromDb(ownerId,password)
+		ownerIdHash = userIdHashFromUserId(ownerId)
+		
+		queryResult = SQL.query("SELECT deviceIdCipher,deviceTagCipher FROM deviceUsership WHERE userIdHash=#{ownerIdHash} AND ownerIdHash=#{ownerIdHash}")
+		ownedDeviceMapping = Hash.new
+		queryResult.each do |idTagCipherPair|
+			#map the decrypted device tags by decrypted device IDs
+			ownedDeviceMapping[decryptString(ownerId,password,idTagCipherPair[0])] = decryptString(idTagCipherPair[1])
+		end
+		
+		return ownedDeviceMapping
+	end
+	
+	def self.mapOwnedDeviceUsersFromDb(ownerId,password)
+		ownerIdHash = userIdHashFromUserId(ownerId)
+		
+		queryResult = SQL.query("SELECT deviceIdCipher,userIdCipher FROM deviceUsership WHERE ownerIdHash=#{ownerIdHash}")
+		ownedDeviceUserMapping = Hash.new
+		queryResult.each do |deviceUserCipherPair|
+			#map the decrypted user IDs by decrypted device IDs
+			deviceId = decryptString(ownerId,password,deviceUserCipherPair[0])
+			
+			if !ownedDeviceUserMapping.hasKey(deviceId)
+				ownedDeviceUserMapping[deviceId] = Array.new
+			end
+				
+			ownedDeviceUserMapping[deviceId] << decryptString(idTagCipherPair[1])
+		end
+	end
+	
+	def self.getAllUsableDevicesFromDb(userId,password)
+		userIdHash = userIdHashFromUserId(userId)
+		
+		queryResult = SQL.query("SELECT deviceIdCipher,deviceTagCipher FROM deviceUsership WHERE userIdHash=#{userIdHash}")
+		usableDeviceMapping = Hash.new
+		queryResult.each do |idTagCipherPair|
+			#map the decrypted device tags by decrypted device IDs
+			usableDeviceMapping[decryptString(userId,password,idTagCipherPair[0])] = decryptString(idTagCipherPair[1])
+		end
+		
+		return usableDeviceMapping
+	end
+
+	def self.setTagInDb(userId,password,deviceId,tag)
+		ownerIdHash = userIdHashFromUserId(userId)
+		deviceIdHash = deviceIdHashFromDeviceId(userId,deviceId)
+	
+		#collect all user hashes
+		deviceUserHashes = SQL.query("SELECT userIdHash FROM deviceUsership WHERE deviceIdHash=#{deviceIdHash}")		
+		deviceUserHashes.each do |userIdHash|
+			tagCipher = encryptString(userId,tag) #encrypt with user's public key
+			
+			SQL.query("UPDATE deviceUsership SET deviceTagCipher=#{tagCipher} WHERE userIdHash=#{userIdHash}")
+		end
+	end
+
+	def self.getTagFromDb(userId,password,deviceId)
 		deviceIdHash = deviceIdHashFromDeviceId(userId,deviceId)
 
-		tagNullResult = sql.query("SELECT deviceTagCipher FROM deviceUsership WHERE deviceIdHash=#{deviceIdHash}")
+		tagNullResult = SQL.query("SELECT deviceTagCipher FROM deviceUsership WHERE deviceIdHash=#{deviceIdHash}")
 		if tagNullResult[0][0]==NULL
 			raise "No tag set for this device"
 		end
 
-		tagCipherResult = sql.query("SELECT deviceTagCipher FROM deviceUsership WHERE deviceIdHash=#{deviceIdHash}")
-		tag = decryptTag(tagCipherResult[0][0],password)
+		tagCipherResult = SQL.query("SELECT deviceTagCipher FROM deviceUsership WHERE deviceIdHash=#{deviceIdHash}")
+		tag = decryptString(userId,password,tagCipherResult[0][0])
 	
 		return tag
 	end
 
-	def adminIdHashFromAdminId(adminId)
-		adminIdHashAndSaltResults = sql.query("SELECT adminIdHash,adminIdSalt FROM admins")
-		adminIdHashAndSaltResults.each_hash do |adminIdHashAndSaltResult|
+	def self.adminIdHashFromAdminId(adminId)
+		adminIdHashAndSaltResults = SQL.query("SELECT adminIdHash,adminIdSalt FROM admins")
+		adminIdHashAndSaltResults.each do |adminIdHashAndSaltResult|
 			adminIdHash = adminIdHashAndSaltResult["adminIdHash"]
 			adminIdSalt = adminIdHashAndSaltResult["adminIdSalt"]
 		
@@ -239,22 +360,22 @@ class Database
 		raise "Admin not found"
 	end
 
-	def userIdHashFromUserId(userId)
-		userIdSaltResult = sql.query("SELECT salt FROM globalSalts WHERE fieldName='userId'")
-		userIdHash = digestStringWithSalt(userId,userIdSaltResult[0][0])
+	def self.userIdHashFromUserId(userId)
+		#userIdSaltResult = SQL.query("SELECT salt FROM globalSalts WHERE fieldName='userId'")
+		userIdHash = Cryptography.digestStringWithSalt(userId,USER_SALT)
 	
 		return userIdHash
 	end
 
-	def deviceIdHashFromDeviceId(deviceId)
-		deviceIdSaltResult = sql.query("SELECT salt FROM globalSalts WHERE fieldName='deviceId'")
-		deviceIdHash = hashInt(deviceId,deviceIdSaltResult[0][0])
+	def self.deviceIdHashFromDeviceId(deviceId)
+		#deviceIdSaltResult = SQL.query("SELECT salt FROM globalSalts WHERE fieldName='deviceId'")
+		deviceIdHash = Cryptography.digestStringWithSalt(deviceId,DEVICE_SALT)
 	
 		return deviceIdHash
 	end
 
 	#exception-throwing filters
-	def confirmAdminCredentials(username,password)
+	def self.confirmAdminCredentials(adminId,adminPassword)
 		if !adminExists?(adminId)
 			raise "Unknown admin"
 		elsif !adminPasswordCorrect?(adminId,adminPassword)
@@ -262,15 +383,15 @@ class Database
 		end
 	end
 
-	def confirmUserCredentials(username,password)
-		if !userExists?(ownerId)
+	def self.confirmUserCredentials(userId,password)
+		if !userExists?(userId)
 			raise "Unknown user"
-		elsif !userPasswordCorrect?(ownerId,ownerPassword)
+		elsif !userPasswordCorrect?(userId,ownerPassword)
 			raise "Incorrect password"
 		end
 	end
 
-	def confirmDeviceOwnership(username,deviceId)
+	def self.confirmDeviceOwnership(username,deviceId)
 		if !deviceExists?(deviceId)
 			raise "Device does not exist"
 		elsif !userOwnsDevice?(username,deviceId)
@@ -278,7 +399,7 @@ class Database
 		end
 	end
 
-	def confirmDeviceUsership(userID,deviceId)
+	def self.confirmDeviceUsership(userID,deviceId)
 		if !deviceExists?(deviceId)
 			raise "Device does not exist"
 		elsif !userCanAccessDevice?(userId,deviceId)
@@ -287,18 +408,18 @@ class Database
 	end
 
 	#must verify credentials before returning any meaningful information
-	def addAdmin(adminId,password)
+	def self.addAdmin(adminId,password)
 		if adminExists?(adminId)
 			raise "Admin already exists"
 		end
 	
-		confirmUserFormatCorrect(userId)
+		confirmIdFormatCorrect(adminId)
 		confirmPasswordFormatCorrect(password)
 
-		addAdminToDb(userId,password)
+		addAdminToDb(adminId,password)
 	end
 
-	def addUser(userId,password)
+	def self.addUser(userId,password)
 		if userExists?(userId)
 			raise "User already exists"
 		end
@@ -309,7 +430,7 @@ class Database
 		addUserToDb(userId,password)
 	end
 
-	def addDevice(adminId,adminPassword,deviceId)
+	def self.addDevice(adminId,adminPassword,deviceId)
 		confirmAdminCredentials(adminId,adminPassword)
 	
 		if deviceExists?(deviceId)
@@ -319,7 +440,7 @@ class Database
 		addDeviceToDb(adminId,adminPassword,deviceId)
 	end
 
-	def setOwnership(ownerId,ownerPassword,deviceId)
+	def self.setOwnership(ownerId,ownerPassword,deviceId)
 		confirmUserCredentials(ownerId,ownerPassword)
 	
 		if !deviceExists?(deviceId)
@@ -333,7 +454,7 @@ class Database
 		setOwnershipInDb(ownerId,ownerPassword,deviceId)
 	end
 
-	def setUsership(ownerId,ownerPassword,userId,deviceId)
+	def self.setUsership(ownerId,ownerPassword,userId,deviceId)
 		confirmUserCredentials(ownerId,ownerPassword)
 		confirmDeviceOwnership(ownerId,deviceId)
 
@@ -344,7 +465,7 @@ class Database
 		setUsershipInDb(ownerId,ownerPassword,userId,deviceId)
 	end
 
-	def isDeviceOwner?(ownerId,password,deviceId)
+	def self.isDeviceOwner?(ownerId,password,deviceId)
 		confirmUserCredentials(ownerId,password)
 
 		begin
@@ -356,7 +477,7 @@ class Database
 		return true
 	end
 
-	def isDeviceUser?(userId,password,deviceId)
+	def self.isDeviceUser?(userId,password,deviceId)
 		confirmUserCredentials(userId,password)
 
 		begin
@@ -368,7 +489,7 @@ class Database
 		return true
 	end
 
-	def revokeUsership(ownerId,ownerPassword,userId,deviceId)
+	def self.revokeUsership(ownerId,ownerPassword,userId,deviceId)
 		confirmUserCredentials(ownerId,ownerPassword)
 		confirmDeviceOwnership(ownerId,deviceId)
 	
@@ -381,20 +502,54 @@ class Database
 		revokeUsershipInDb(userId,deviceId)
 	end
 
-	def revokeOwnership(adminId,adminPassword,ownerId,deviceId)
+	def self.revokeOwnership(adminId,adminPassword,ownerId,deviceId)
 		confirmAdminCredentials(adminId,adminPassword)
 		confirmDeviceOwnership(ownerId,deviceId)
 
 		revokeOwnershipInDb(ownerId,deviceId)
 	end
 
-	def getTag(userId, password, deviceId)
+	def self.getAllUserHashes(adminId,password)
+		confirmAdminCredentials(adminId,password)
+		
+		getAllUserHashesFromDb()
+	end
+	
+	def self.getAllDeviceHashes(adminId,password)
+		confirmAdminCredentials(adminId,password)
+		
+		getAllDeviceHashesFromDb()
+	end
+
+	def self.getAllOwnedDevices(ownerId,password)
+		confirmUserCredentials(ownerId,password)
+		
+		getAllOwnedDevicesFromDb(ownerId,password)
+	end
+	
+	def self.mapOwnedDeviceUsers(ownerId,password)
+		confirmUserCredentials(ownerId,password)
+		
+		mapOwnedDeviceUsersFromDb(ownerId,password)
+	end
+	
+	def self.getAllUsableDevices(userId,password)
+		confirmUserCredentials(userId,password)
+		
+		getAllOwnedDevicesFromDb(userId,password)
+	end
+
+	def self.setTag(ownerId,password,deviceId,deviceTag)
+		confirmUserCredentials(ownerId,password)
+		confirmDeviceOwnership(ownerId,deviceId)
+		
+		setTagInDb(ownerId,password,deviceId,deviceTag)
+	end
+
+	def self.getTag(userId,password,deviceId)
 		confirmUserCredentials(userId,password)
 		confirmDeviceUsership(userId,password)
 
 		getTagFromDb(userId,password,deviceId)
-	end
-
-=end	
-	
+	end	
 end

@@ -1,6 +1,10 @@
 require 'test/unit'
 
-class TestIntegration < Test::Unit::Testcase
+require_relative '../lib/Database.rb'
+require_relative './UserSession.rb'
+require_relative './AdminSession.rb'
+
+class TestIntegration < Test::Unit::TestCase
 	ADMIN_NAME     = "Admin123"
 	ADMIN_PASSWORD = "Admin123password"
 	
@@ -16,17 +20,17 @@ class TestIntegration < Test::Unit::Testcase
 	DEVICE_STRING_A = "This is my device. Deal with it."
 	DEVICE_STRING_B = "This is also my device. Deal with it again."
 
-	def createUserTest
-		assert_nothing_raised do
-			burnEverything()
+	def testCreateUser
+		#assert_nothing_raised do
+			Database.burnEverything()
 			
-			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
+			adminSession = AdminSession.addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 		
-			if adminSession.listAllUsers() != nil
+			if adminSession.listAllUserHashes() != nil
 				raise("Database reports existing users before first user creation")
 			end
 		
-			userSession = addUser(USER_A_NAME,USER_A_PASSWORD)
+			userSession = UserSession.addUser(USER_A_NAME,USER_A_PASSWORD)
 		
 			if userSession.ownedDevices() != nil
 				raise("Database reports existing owned devices in empty user")
@@ -35,50 +39,52 @@ class TestIntegration < Test::Unit::Testcase
 				raise("Database reports existing usable devices in empty user")
 			end
 		
-			if adminSession.listAllUsers.length() != 1
-				raise("Should be exactly 1 user in database, found #{adminSession.listAllUsers().length().to_s()}")
-			elsif adminSession.listAllUsers[0] != USER_A_NAME
-				raise("Should have username #{USER_A_NAME}, found #{adminSession.listAllUsers()[0]}")
+			if adminSession.listAllUserHashes.length() != 1
+				raise("Should be exactly 1 user in database, found #{adminSession.listAllUserHashes().length().to_s()}")
+			#elsif adminSession.listAllUserHashes[0] != USER_A_NAME
+			#	raise("Should have username #{USER_A_NAME}, found #{adminSession.listAllUsers()[0]}")
 			end
-		end
+		#end
 	end
 	
-	def createDeviceTest
-		assert_nothing_raised do
-			burnEverything()
+=begin
 	
-			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
+	def testCreateDevice
+		assert_nothing_raised do
+			Database.burnEverything()
+	
+			adminSession = AdminSession.addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 		
-			if adminSession.listAllDevices() != nil
+			if adminSession.listAllDeviceHashes() != nil
 				raise("Database reports existing devices before first device creation")
 			end
 		
 			adminSession.createDevice(DEVICE_ID_A)
 		
-			if adminSession.listAllDevices().length() != 1
-				raise("Should be exactly 1 device in database, found #{adminSession.listAllDevices().length()}")
-			elsif adminSession.listAllDevices()[0] != DEVICE_ID_A
-				raise("Should have device ID #{DEVICE_ID_A}, found #{adminSession.listAllDevices()[0]}")
+			if adminSession.listAllDeviceHashes().length() != 1
+				raise("Should be exactly 1 device in database, found #{adminSession.listAllDeviceHashes().length()}")
+			elsif adminSession.listAllDeviceHashes()[0] != DEVICE_ID_A
+				raise("Should have device ID #{DEVICE_ID_A}, found #{adminSession.listAllDeviceHashes()[0]}")
 			end
 		end
 	end
 	
-	def listAllUsersTest
-		createDeviceTest()
+	def testListAllUsers
+		testCreateDevice()
 	end
 	
-	def listAllDevicesTest
-		createDeviceTest()
+	def testListAllDevices
+		testCreateDevice()
 	end
 	
-	def claimDeviceOwnershipTest
+	def testClaimDeviceOwnership
 		assert_nothing_raised do
-			burnEverything()
+			Databse.burnEverything()
 	
-			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
+			adminSession = AdminSession.addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 			adminSession.createDevice(DEVICE_ID_A)
 		
-			userSession = addUser(USER_A_NAME,USER_A_PASSWORD)
+			userSession = UserSession.addUser(USER_A_NAME,USER_A_PASSWORD)
 			userSession.claimDevice(DEVICE_ID_A)
 		
 			if userSession.listAllOwnedDevices().length() != 1
@@ -89,17 +95,17 @@ class TestIntegration < Test::Unit::Testcase
 		end
 	end
 	
-	def addDeviceUsershipTest
-		burnEverything()
+	def testAddDeviceUsership
+		Database.burnEverything()
 	
 		assert_nothing_raised do
-			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
+			adminSession = AdminSession.addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 			adminSession.createDevice(DEVICE_ID_A)
 		
-			userSessionA = addUser(USER_A_NAME,USER_A_PASSWORD)
+			userSessionA = UserSession.addUser(USER_A_NAME,USER_A_PASSWORD)
 			userSessionA.claimDevice(DEVICE_ID_A)
 		
-			userSessionB = addUser(USER_B_NAME,USER_B_PASSWORD)
+			userSessionB = UserSession.addUser(USER_B_NAME,USER_B_PASSWORD)
 		
 			userSessionA.addUserToDevice(DEVICE_ID_A,USER_B_NAME)
 			deviceUserMap = userSessionA.mapAllDeviceUsers()
@@ -119,20 +125,20 @@ class TestIntegration < Test::Unit::Testcase
 		end
 	end
 	
-	def createAdminTest #just prove that this doesn't throw an exception
+	def testCreateAdmin #just prove that this doesn't throw an exception
 		assert_nothing_raised do
-			burnEverything()
+			Database.burnEverything()
 	
-			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
+			adminSession = AdminSession.addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 			adminSession.endSession()
 		
-			adminSession = startAdminSession(ADMIN_NAME,ADMIN_PASSWORD)
+			adminSession = AdminSession.login(ADMIN_NAME,ADMIN_PASSWORD)
 		end
 	end
 	
-	def revokeDeviceUsershipTest
+	def testRevokeDeviceUsership
 		assert_nothing_raised do
-			burnEverything()
+			Database.burnEverything()
 	
 			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 			adminSession.createDevice(DEVICE_ID_A)
@@ -156,9 +162,9 @@ class TestIntegration < Test::Unit::Testcase
 		end
 	end
 	
-	def setDeviceStringTest
+	def testSetDeviceString
 		assert_nothing_raised do
-			burnEverything()
+			Database.burnEverything()
 	
 			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 			adminSession.createDevice(DEVICE_ID_A)
@@ -173,13 +179,13 @@ class TestIntegration < Test::Unit::Testcase
 		end
 	end
 	
-	def getDeviceStringTest
-		setDeviceStringTest()
+	def testGetDeviceString
+		testSetDeviceString()
 	end
 	
-	def getAllOwnedDeviceStringsTest
+	def testGetAllOwnedDeviceStrings
 		assert_nothing_raised do
-			burnEverything()
+			Database.burnEverything()
 	
 			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 			adminSession.createDevice(DEVICE_ID_A)
@@ -203,9 +209,9 @@ class TestIntegration < Test::Unit::Testcase
 		end
 	end
 	
-	def getAllUsableDeviceStringsTest
+	def testGetAllUsableDeviceStrings
 		assert_nothing_raised do
-			burnEverything()
+			Database.burnEverything()
 	
 			adminSession = addAdmin(ADMIN_NAME,ADMIN_PASSWORD)
 			adminSession.createDevice(DEVICE_ID_A)
@@ -235,7 +241,9 @@ class TestIntegration < Test::Unit::Testcase
 		end
 	end
 	
-	def getAllUserDevicePairsOwnedDevicesTest
-		getAllOwnedDeviceStringsTest()
+	def testGetAllUserDevicePairsOwnedDevices
+		testGetAllOwnedDeviceStrings()
 	end
+	
+=end
 end

@@ -22,11 +22,11 @@ class Cryptography
 	end
 
 	def self.digestStringWithSalt(string,salt)
-		OpenSSL::Digest.digest(SHA_TYPE,genSaltedString(string,salt))
+		OpenSSL::Digest.digest(SHA_TYPE,genSaltedString(string,salt)).unpack('C*').join(" ")
 	end
 
 	def self.digestSensitiveStringWithSalt(string,salt)
-		OpenSSL::PKCS5.pbkdf2_hmac_sha1(string,salt,NUM_PBKDF_ITERATIONS,AES_BYTE_LENGTH)
+		OpenSSL::PKCS5.pbkdf2_hmac_sha1(string,salt,NUM_PBKDF_ITERATIONS,AES_BYTE_LENGTH).unpack('C*').join(" ")
 	end
 	
 	def self.digestUserCredentialsWithSalt(userId,password,salt)
