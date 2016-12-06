@@ -1,4 +1,5 @@
 require 'openssl'
+require 'base64'
 
 #TODO: make methods public and private, as appropriate
 class Cryptography
@@ -56,12 +57,12 @@ class Cryptography
 
 	def self.encryptWithPublicKeyPem(data,publicKeyPem)
 		rsa = OpenSSL::PKey::RSA.new(publicKeyPem)
-		rsa.public_encrypt(data)
+		Base64.encode64(rsa.public_encrypt(data))
 	end
 
 	def self.decryptWithPrivateKeyPem(encryptedData,privateKeyPem)
 		rsa = OpenSSL::PKey::RSA.new(privateKeyPem)
-		rsa.private_decrypt(encryptedData)
+		rsa.private_decrypt(Base64.decode64(encryptedData))
 	end
 
 	def self.decryptDataWithCredentials(userId,password,salt,encryptedData,encryptedPrivateKeyPem)

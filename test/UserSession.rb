@@ -32,12 +32,16 @@ class UserSession
 		Database.getTag(@username,@password,deviceId)
 	end
 	
-	def listAllOwnedDevices()
+	def ownedDevices()
 		Database.getAllOwnedDevices(@username,@password)
 	end
 	
-	def listAllUsableDevices()
+	def usableDevices()
 		Database.getAllUsableDevices(@username,@password)
+	end
+	
+	def mapAllDeviceUsers()
+		Database.mapOwnedDeviceUsers(@username,@password)
 	end
 	
 	def removeUserFromDevice(name,deviceId)
